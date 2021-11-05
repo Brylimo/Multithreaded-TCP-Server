@@ -70,13 +70,7 @@ void server_handoff (int sockfd) {
   if (rc) {
   	printf("Error; return code form pthread_create() is %d\n", rc);
 	exit(-1);
-  }
-  
-  rc = pthread_join(thread, NULL);
-  if (rc) {
-  	printf("Error; return code from pthread_join() is %d\n", rc);
-	exit(-1);
-  }
+  }  
 }
 
 /* the main per-connection service loop of the server; assumes
