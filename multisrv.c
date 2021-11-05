@@ -24,37 +24,74 @@
 #include "pthread.h"
 #include "echolib.h"
 #include "checks.h"
-#define MAX_LEN 3
+#include "Queue.h"
 
-sem_t empty, full, mutex;
+Queue buffer;
+pthread_mutex_t lock;
+pthread_mutex_t lock2;
+pthread_cond_t signal2;
+int op = 0;
 
-int op = 0, in, out;
-int buffer[MAX_LEN];
+typedef struct __threadpool {
+	int num_threads;
+	int active;
+	pthread_t* pool;
+} ThreadPool;
 
 void serve_connection (int sockfd);
+void* job(void *arg);
 
-void produce(int data)
+ThreadPool thread_pool_constructor(int num_threads)
 {
-	sem_wait(&full);
-	sem_wait(&mutex);
-	buffer[in] = data;
-	in = (in + 1) % MAX_LEN;
-	for (int i = 0; i < MAX_LEN; i++)
+	ThreadPool thread_pool;
+	thread_pool.num_threads = num_threads;
+	thread_pool.active = 1;
+	thread_pool.pool = (pthread_t*)malloc(sizeof(pthread_t[num_threads]));
+
+	for (int i = 0; i < num_threads; i++)
 	{
-		printf("%d\n", buffer[i]);
+		pthread_create(&thread_pool.pool[i], NULL, job, (void*)&thread_pool);
 	}
-	sem_post(&mutex);
-	sem_post(&empty);
+	return thread_pool;
 }
 
-void consume(int* data)
+void thread_pool_destructor(ThreadPool * thread_pool)
 {
-	sem_wait(&empty);
-	sem_wait(&mutex);
-	*data = buffer[out];
-	out = (out + 1) % MAX_LEN;
-	sem_post(&mutex);
-	sem_post(&full);
+	thread_pool->active = 0;
+	for (int i = 0; i < thread_pool->num_threads; i++)
+	{
+		pthread_cond_signal(&signal2);
+	}
+	for (int i = 0; i < thread_pool->num_threads; i++)
+	{
+		int rc = pthread_join(thread_pool->pool[i], NULL);
+		if (rc) {
+			printf("Error; return code from pthread_join() is %d\n", rc);
+			exit(-1);
+		}
+	}
+	free(thread_pool->pool);
+}
+
+int work(Data data)
+{
+	return data;
+}
+
+void* job(void *arg)
+{
+	ThreadPool *thread_pool = (ThreadPool*)arg;
+	while (thread_pool->active == 1)
+	{
+		pthread_mutex_lock(&lock);
+		pthread_cond_wait(&signal2, &lock2);
+		Data data = dequeue(&buffer);
+		pthread_mutex_unlock(&lock);
+
+		int ans = work(data);
+		printf("answer : %d\n", ans);
+	}
+	return NULL;
 }
 
 void* acceptorThread(void* args)
@@ -62,6 +99,7 @@ void* acceptorThread(void* args)
   int sockfd = (int)args;
 
   serve_connection(sockfd);	
+  return NULL;
 }	
 
 void server_handoff (int sockfd) {
@@ -87,7 +125,10 @@ void serve_connection (int sockfd) {
     char *temp = strtok(line, " ");
 	
     while (temp != NULL) {
-	produce(atoi(temp));    
+	pthread_mutex_lock(&lock);    
+	enqueue(&buffer, atoi(temp));
+	pthread_cond_signal(&signal2);
+        pthread_mutex_unlock(&lock);	
 	temp = strtok(NULL, " ");
     }    
     /* connection closed by other end */
@@ -158,6 +199,10 @@ int main (int argc, char **argv) {
   int c;
   char* opstring;
 
+  pthread_mutex_init(&lock, NULL);
+  pthread_mutex_init(&lock2, NULL);
+  pthread_cond_init(&signal2, NULL);  
+  
   if (argc == 1) {
   	printf("-n 옵션을 사용하여 입력하세요!\n");
 	return 0;
@@ -176,9 +221,9 @@ int main (int argc, char **argv) {
   }
 
   op = atoi(opstring);
-  sem_init(&empty, 0, 0);
-  sem_init(&full, 0, MAX_LEN);
-  sem_init(&mutex, 0, 1);
+
+  //ThreadPool thread_pool = thread_pool_constructor(op);
+  //queueInit(&buffer);
 
   install_siginthandler();
   open_listening_socket (&listenfd);
@@ -194,9 +239,11 @@ int main (int argc, char **argv) {
      server_handoff (connfd); /* process the connection */
     }
   }
-  sem_destroy(&empty);
-  sem_destroy(&full);
-  sem_destroy(&mutex);
+  //thread_pool_destructor(&thread_pool);
+  pthread_mutex_destroy(&lock);
+  pthread_mutex_destroy(&lock2);
+  pthread_cond_destroy(&signal2);
+
   CHECK (close (listenfd));
   return 0;
 }
