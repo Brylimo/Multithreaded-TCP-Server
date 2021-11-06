@@ -38,10 +38,9 @@ pthread_mutex_t lock7;
 pthread_cond_t signal2;
 pthread_cond_t signal3;
 int op = 0;
-
+int flag = 0;
 typedef struct __threadpool {
 	int num_threads;
-	int active;
 	pthread_t* pool;
 } ThreadPool;
 
@@ -53,7 +52,6 @@ ThreadPool* thread_pool_constructor(int num_threads)
 {
 	ThreadPool* thread_pool = (ThreadPool *)malloc(sizeof(ThreadPool));
 	thread_pool->num_threads = num_threads;
-	thread_pool->active = 1;
 	thread_pool->pool = (pthread_t*)malloc(sizeof(pthread_t[num_threads]));
 
 	for (int i = 0; i < num_threads; i++)
@@ -61,7 +59,7 @@ ThreadPool* thread_pool_constructor(int num_threads)
 		if (i % 3 == 0) {
 			pthread_create(&thread_pool->pool[i], NULL, acceptorThread, NULL);
 		} else {
-			pthread_create(&thread_pool->pool[i], NULL, job, (void*)thread_pool);
+			pthread_create(&thread_pool->pool[i], NULL, job, NULL);
 		}
 	}
 	return thread_pool;
@@ -69,11 +67,10 @@ ThreadPool* thread_pool_constructor(int num_threads)
 
 void thread_pool_destructor(ThreadPool * thread_pool)
 {
-	thread_pool->active = 0;
-	for (int i = 0; i < thread_pool->num_threads; i++)
-	{
-		pthread_cond_signal(&signal2);
-	}
+	flag = 1;
+	pthread_cond_signal(&signal2);
+	pthread_cond_signal(&signal3);
+	
 	for (int i = 0; i < thread_pool->num_threads; i++)
 	{
 		int rc = pthread_join(thread_pool->pool[i], NULL);
@@ -93,8 +90,7 @@ int work(Data data)
 void* job(void *arg)
 {
 	Data data;
-	ThreadPool *thread_pool = (ThreadPool*)arg;
-	while (thread_pool->active == 1)
+	while (!flag)
 	{
 		pthread_mutex_lock(&lock);
 		if (IsQueueEmpty(&buffer)) {
@@ -106,9 +102,11 @@ void* job(void *arg)
 			pthread_mutex_unlock(&lock4);
 		}
 		pthread_mutex_unlock(&lock);
-
-		int ans = work(data);
-		printf("answer : %d\n", ans);
+		
+		if (!flag) {
+			int ans = work(data);
+			printf("answer : %d\n", ans);
+		}
 	}
 	return NULL;
 }
@@ -116,7 +114,7 @@ void* job(void *arg)
 void* acceptorThread(void* args)
 {
   Data sockfd;	
-  while(TRUE)
+  while(!flag)
   {
 	pthread_mutex_lock(&lock5);
         if (IsQueueEmpty(&sock_buffer)) {	
@@ -144,8 +142,6 @@ void server_handoff (int sockfd) {
 	enqueue(&sock_buffer, sockfd);
 	pthread_mutex_lock(&lock7);
   }
-  int* sockfd_pt = (int*)malloc(sizeof(int));
-  *sockfd_pt = sockfd;  
 }
 
 /* the main per-connection service loop of the server; assumes
@@ -289,6 +285,7 @@ int main (int argc, char **argv) {
      server_handoff (connfd); /* process the connection */
     }
   }
+ 
   thread_pool_destructor(thread_pool);
   pthread_mutex_destroy(&lock);
   pthread_mutex_destroy(&lock2);
