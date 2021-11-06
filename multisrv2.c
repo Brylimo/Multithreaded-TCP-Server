@@ -27,28 +27,21 @@
 #include "Queue.h"
 
 Queue buffer;
-Queue sock_buffer;
 pthread_mutex_t lock;
 pthread_mutex_t lock2;
 pthread_mutex_t lock3;
 pthread_mutex_t lock4;
-pthread_mutex_t lock5;
-pthread_mutex_t lock6;
-pthread_mutex_t lock7;
 pthread_cond_t signal2;
-pthread_cond_t signal3;
 int op = 0;
 
 typedef struct __threadpool {
 	int num_threads;
 	int active;
 	pthread_t* pool;
-	// void* (*fp)(void*);
 } ThreadPool;
 
 void serve_connection (int sockfd);
 void* job(void *arg);
-void* acceptorThread(void *args);
 
 ThreadPool* thread_pool_constructor(int num_threads)
 {
@@ -59,11 +52,7 @@ ThreadPool* thread_pool_constructor(int num_threads)
 
 	for (int i = 0; i < num_threads; i++)
 	{
-		if (i % 3 == 0) {
-			pthread_create(&thread_pool->pool[i], NULL, acceptorThread, NULL);
-		} else {
-			pthread_create(&thread_pool->pool[i], NULL, job, (void*)thread_pool);
-		}
+		pthread_create(&thread_pool->pool[i], NULL, job, (void*)thread_pool);
 	}
 	return thread_pool;
 }
@@ -116,39 +105,21 @@ void* job(void *arg)
 
 void* acceptorThread(void* args)
 {
-  Data sockfd;	
-  while(TRUE)
-  {
-	pthread_mutex_lock(&lock5);
-        if (IsQueueEmpty(&sock_buffer)) {	
-  		pthread_cond_wait(&signal3, &lock6);
-		printf("ho\n");
-		sockfd = dequeue(&sock_buffer);
-	} else {
-		pthread_mutex_lock(&lock7);
-		sockfd = dequeue(&sock_buffer);
-		pthread_mutex_unlock(&lock7);
-	}
-	pthread_mutex_unlock(&lock5);
+  int sockfd = *(int*)args;
 
-	serve_connection(sockfd);
-  }
+  serve_connection(sockfd);	
   return NULL;
 }	
 
 void server_handoff (int sockfd) {
-  printf("hello\n");
-  if (IsQueueEmpty(&sock_buffer))
-  {
-  	enqueue(&sock_buffer, sockfd);
-  	pthread_cond_signal(&signal3);
-  } else {
-  	pthread_mutex_lock(&lock7);
-	enqueue(&sock_buffer, sockfd);
-	pthread_mutex_lock(&lock7);
-  }
+  pthread_t thread;
   int* sockfd_pt = (int*)malloc(sizeof(int));
-  *sockfd_pt = sockfd;  
+  *sockfd_pt = sockfd; 
+  int rc = pthread_create(&thread, NULL, acceptorThread, (void*)sockfd_pt);
+  if (rc) {
+  	printf("Error; return code form pthread_create() is %d\n", rc);
+	exit(-1);
+  }  
 }
 
 /* the main per-connection service loop of the server; assumes
@@ -249,11 +220,7 @@ int main (int argc, char **argv) {
   pthread_mutex_init(&lock2, NULL);
   pthread_mutex_init(&lock3, NULL);
   pthread_mutex_init(&lock4, NULL);
-  pthread_mutex_init(&lock5, NULL);
-  pthread_mutex_init(&lock6, NULL);
-  pthread_mutex_init(&lock7, NULL);
-  pthread_cond_init(&signal2, NULL);
-  pthread_cond_init(&signal3, NULL);  
+  pthread_cond_init(&signal2, NULL);  
   
   if (argc == 1) {
   	printf("-n 옵션을 사용하여 입력하세요!\n");
@@ -275,7 +242,6 @@ int main (int argc, char **argv) {
   op = atoi(opstring);
 
   queueInit(&buffer);
-  queueInit(&sock_buffer);
   ThreadPool* thread_pool = thread_pool_constructor(op);
 
   install_siginthandler();
@@ -297,11 +263,7 @@ int main (int argc, char **argv) {
   pthread_mutex_destroy(&lock2);
   pthread_mutex_destroy(&lock3);
   pthread_mutex_destroy(&lock4);
-  pthread_mutex_destroy(&lock5);
-  pthread_mutex_destroy(&lock6);
-  pthread_mutex_destroy(&lock7);
   pthread_cond_destroy(&signal2);
-  pthread_cond_destroy(&signal3);
 
   CHECK (close (listenfd));
   return 0;
