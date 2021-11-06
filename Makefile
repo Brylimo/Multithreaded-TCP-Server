@@ -22,7 +22,7 @@ multisrv: echolib.o Queue.o multisrv.c $(DEPS)
 echolib.o: echolib.c $(DEPS)
 	$(CC) $(CCOPTS) -c echolib.c
 
-Queue.o: Queue.c
+Queue.o: Queue.c $(DEPS)
 	$(CC) $(CCOPTS) -c Queue.c
 
 driver: driver.c echolib.o

@@ -10,7 +10,7 @@ void queueInit(Queue* que)
 
 int IsQueueEmpty(Queue* que)
 {
-	if (que->front == que->rear)
+	if (que->front == NULL)
 		return TRUE;
 	else
 		return FALSE;
@@ -26,15 +26,15 @@ void enqueue(Queue* que, Data data)
 	{
 		que->front = newNode;
 		que->rear = newNode;
-	} else {
+	} else { 
 		que->rear->next = newNode;
 		que->rear = newNode;
-	}
+	} 
 }
 
 Data dequeue(Queue* que)
 {
-	if (IsQueueEmpty(&que))
+	if (IsQueueEmpty(que))
 	{
 		return 0;
 	}
@@ -49,7 +49,7 @@ Data dequeue(Queue* que)
 
 Data queuePeek(Queue* que)
 {
-	if (IsQueueEmpty(&que))
+	if (IsQueueEmpty(que))
 	{
 		return 0;
 	}

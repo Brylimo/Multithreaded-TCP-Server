@@ -29,6 +29,8 @@
 Queue buffer;
 pthread_mutex_t lock;
 pthread_mutex_t lock2;
+pthread_mutex_t lock3;
+pthread_mutex_t lock4;
 pthread_cond_t signal2;
 int op = 0;
 
@@ -41,16 +43,16 @@ typedef struct __threadpool {
 void serve_connection (int sockfd);
 void* job(void *arg);
 
-ThreadPool thread_pool_constructor(int num_threads)
+ThreadPool* thread_pool_constructor(int num_threads)
 {
-	ThreadPool thread_pool;
-	thread_pool.num_threads = num_threads;
-	thread_pool.active = 1;
-	thread_pool.pool = (pthread_t*)malloc(sizeof(pthread_t[num_threads]));
+	ThreadPool* thread_pool = (ThreadPool *)malloc(sizeof(ThreadPool));
+	thread_pool->num_threads = num_threads;
+	thread_pool->active = 1;
+	thread_pool->pool = (pthread_t*)malloc(sizeof(pthread_t[num_threads]));
 
 	for (int i = 0; i < num_threads; i++)
 	{
-		pthread_create(&thread_pool.pool[i], NULL, job, (void*)&thread_pool);
+		pthread_create(&thread_pool->pool[i], NULL, job, (void*)thread_pool);
 	}
 	return thread_pool;
 }
@@ -80,12 +82,19 @@ int work(Data data)
 
 void* job(void *arg)
 {
+	Data data;
 	ThreadPool *thread_pool = (ThreadPool*)arg;
 	while (thread_pool->active == 1)
 	{
 		pthread_mutex_lock(&lock);
-		pthread_cond_wait(&signal2, &lock2);
-		Data data = dequeue(&buffer);
+		if (IsQueueEmpty(&buffer)) {
+			pthread_cond_wait(&signal2, &lock2);
+			data = dequeue(&buffer);
+		} else {
+			pthread_mutex_lock(&lock4);
+			data = dequeue(&buffer);
+			pthread_mutex_unlock(&lock4);
+		}
 		pthread_mutex_unlock(&lock);
 
 		int ans = work(data);
@@ -96,7 +105,7 @@ void* job(void *arg)
 
 void* acceptorThread(void* args)
 {
-  int sockfd = (int)args;
+  int sockfd = *(int*)args;
 
   serve_connection(sockfd);	
   return NULL;
@@ -104,7 +113,9 @@ void* acceptorThread(void* args)
 
 void server_handoff (int sockfd) {
   pthread_t thread;
-  int rc = pthread_create(&thread, NULL, acceptorThread, (void*)sockfd);
+  int* sockfd_pt = (int*)malloc(sizeof(int));
+  *sockfd_pt = sockfd; 
+  int rc = pthread_create(&thread, NULL, acceptorThread, (void*)sockfd_pt);
   if (rc) {
   	printf("Error; return code form pthread_create() is %d\n", rc);
 	exit(-1);
@@ -123,12 +134,18 @@ void serve_connection (int sockfd) {
     if ((n = readline (&conn, line, MAXLINE)) == 0) goto quit;
     // my code
     char *temp = strtok(line, " ");
-	
     while (temp != NULL) {
-	pthread_mutex_lock(&lock);    
-	enqueue(&buffer, atoi(temp));
-	pthread_cond_signal(&signal2);
-        pthread_mutex_unlock(&lock);	
+	pthread_mutex_lock(&lock3);
+	if (IsQueueEmpty(&buffer))
+	{	
+		enqueue(&buffer, atoi(temp));
+		pthread_cond_signal(&signal2);
+	} else {
+		pthread_mutex_lock(&lock4);
+		enqueue(&buffer, atoi(temp));
+		pthread_mutex_unlock(&lock4);
+	}
+	pthread_mutex_unlock(&lock3);
 	temp = strtok(NULL, " ");
     }    
     /* connection closed by other end */
@@ -201,6 +218,7 @@ int main (int argc, char **argv) {
 
   pthread_mutex_init(&lock, NULL);
   pthread_mutex_init(&lock2, NULL);
+  pthread_mutex_init(&lock3, NULL);
   pthread_cond_init(&signal2, NULL);  
   
   if (argc == 1) {
@@ -222,8 +240,8 @@ int main (int argc, char **argv) {
 
   op = atoi(opstring);
 
-  //ThreadPool thread_pool = thread_pool_constructor(op);
-  //queueInit(&buffer);
+  queueInit(&buffer);
+  ThreadPool* thread_pool = thread_pool_constructor(op);
 
   install_siginthandler();
   open_listening_socket (&listenfd);
@@ -239,9 +257,10 @@ int main (int argc, char **argv) {
      server_handoff (connfd); /* process the connection */
     }
   }
-  //thread_pool_destructor(&thread_pool);
+  thread_pool_destructor(thread_pool);
   pthread_mutex_destroy(&lock);
   pthread_mutex_destroy(&lock2);
+  pthread_mutex_destroy(&lock3);
   pthread_cond_destroy(&signal2);
 
   CHECK (close (listenfd));
