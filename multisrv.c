@@ -43,7 +43,6 @@ typedef struct __threadpool {
 	int num_threads;
 	int active;
 	pthread_t* pool;
-	// void* (*fp)(void*);
 } ThreadPool;
 
 void serve_connection (int sockfd);
@@ -122,7 +121,6 @@ void* acceptorThread(void* args)
 	pthread_mutex_lock(&lock5);
         if (IsQueueEmpty(&sock_buffer)) {	
   		pthread_cond_wait(&signal3, &lock6);
-		printf("ho\n");
 		sockfd = dequeue(&sock_buffer);
 	} else {
 		pthread_mutex_lock(&lock7);
@@ -137,12 +135,11 @@ void* acceptorThread(void* args)
 }	
 
 void server_handoff (int sockfd) {
-  printf("hello\n");
   if (IsQueueEmpty(&sock_buffer))
-  {
+  {  
   	enqueue(&sock_buffer, sockfd);
   	pthread_cond_signal(&signal3);
-  } else {
+  } else { 
   	pthread_mutex_lock(&lock7);
 	enqueue(&sock_buffer, sockfd);
 	pthread_mutex_lock(&lock7);
@@ -288,7 +285,7 @@ int main (int argc, char **argv) {
     if ((connfd = accept (listenfd, (struct sockaddr *) &cliaddr, &clilen)) < 0) {
       if (errno != EINTR) ERR_QUIT ("accept"); 
       /* otherwise try again, unless we are shutting down */
-    } else {
+    } else { 
      server_handoff (connfd); /* process the connection */
     }
   }
