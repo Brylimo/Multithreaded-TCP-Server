@@ -219,6 +219,7 @@ int main (int argc, char **argv) {
   pthread_mutex_init(&lock, NULL);
   pthread_mutex_init(&lock2, NULL);
   pthread_mutex_init(&lock3, NULL);
+  pthread_mutex_init(&lock4, NULL);
   pthread_cond_init(&signal2, NULL);  
   
   if (argc == 1) {
@@ -261,6 +262,7 @@ int main (int argc, char **argv) {
   pthread_mutex_destroy(&lock);
   pthread_mutex_destroy(&lock2);
   pthread_mutex_destroy(&lock3);
+  pthread_mutex_destroy(&lock4);
   pthread_cond_destroy(&signal2);
 
   CHECK (close (listenfd));
