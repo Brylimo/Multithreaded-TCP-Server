@@ -93,7 +93,7 @@ void* job(void *arg)
 	while (!flag)
 	{
 		pthread_mutex_lock(&lock);
-		if (IsQueueEmpty(&buffer)) {
+		if (IsQueueEmpty(&buffer) && !flag) {
 			pthread_cond_wait(&signal2, &lock2);
 			data = dequeue(&buffer);
 		} else {
@@ -117,7 +117,7 @@ void* acceptorThread(void* args)
   while(!flag)
   {
 	pthread_mutex_lock(&lock5);
-        if (IsQueueEmpty(&sock_buffer)) {	
+        if (IsQueueEmpty(&sock_buffer) && !flag ) {	
   		pthread_cond_wait(&signal3, &lock6);
 		sockfd = dequeue(&sock_buffer);
 	} else {
@@ -127,7 +127,9 @@ void* acceptorThread(void* args)
 	}
 	pthread_mutex_unlock(&lock5);
 
-	serve_connection(sockfd);
+	if (!flag) {
+		serve_connection(sockfd);
+	}
   }
   return NULL;
 }	
