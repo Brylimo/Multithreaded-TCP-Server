@@ -44,7 +44,7 @@ typedef struct __threadpool {
 	pthread_t* pool;
 } ThreadPool;
 
-void serve_connection (int sockfd);
+void serve_connection (int sockfd, int op);
 void* job(void *arg);
 void* acceptorThread(void *args);
 
@@ -128,27 +128,31 @@ void* acceptorThread(void* args)
 	pthread_mutex_unlock(&lock5);
 
 	if (!flag) {
-		serve_connection(sockfd);
+		serve_connection(sockfd, 1);
 	}
   }
   return NULL;
 }	
 
-void server_handoff (int sockfd) {
-  if (IsQueueEmpty(&sock_buffer))
-  {  
-  	enqueue(&sock_buffer, sockfd);
-  	pthread_cond_signal(&signal3);
-  } else { 
-  	pthread_mutex_lock(&lock7);
-	enqueue(&sock_buffer, sockfd);
-	pthread_mutex_lock(&lock7);
+void server_handoff (int sockfd, int op) {
+  if (op > 0) {
+  	if (IsQueueEmpty(&sock_buffer))
+  	{  
+  		enqueue(&sock_buffer, sockfd);
+  		pthread_cond_signal(&signal3);
+  	} else { 
+  		pthread_mutex_lock(&lock7);
+		enqueue(&sock_buffer, sockfd);
+		pthread_mutex_lock(&lock7);
+  	}
+  } else if (op == 0) {
+  	serve_connection(sockfd, op);
   }
 }
 
 /* the main per-connection service loop of the server; assumes
    sockfd is a connected socket */
-void serve_connection (int sockfd) {
+void serve_connection (int sockfd, int op) {
   ssize_t  n, result;
   char line[MAXLINE];
   connection_t conn;
@@ -157,21 +161,23 @@ void serve_connection (int sockfd) {
   while (! shutting_down) {
     if ((n = readline (&conn, line, MAXLINE)) == 0) goto quit;
     // my code
-    char *temp = strtok(line, " ");
-    while (temp != NULL) {
-	pthread_mutex_lock(&lock3);
-	if (IsQueueEmpty(&buffer))
-	{	
-		enqueue(&buffer, atoi(temp));
-		pthread_cond_signal(&signal2);
-	} else {
-		pthread_mutex_lock(&lock4);
-		enqueue(&buffer, atoi(temp));
-		pthread_mutex_unlock(&lock4);
-	}
-	pthread_mutex_unlock(&lock3);
-	temp = strtok(NULL, " ");
-    }    
+    if (op > 0) {
+    	char *temp = strtok(line, " ");
+    	while (temp != NULL) {
+		pthread_mutex_lock(&lock3);
+		if (IsQueueEmpty(&buffer))
+		{	
+			enqueue(&buffer, atoi(temp));
+			pthread_cond_signal(&signal2);
+		} else {
+			pthread_mutex_lock(&lock4);
+			enqueue(&buffer, atoi(temp));
+			pthread_mutex_unlock(&lock4);
+		}
+		pthread_mutex_unlock(&lock3);
+		temp = strtok(NULL, " ");
+    	}	    
+    }
     /* connection closed by other end */
     if (shutting_down) goto quit;
     if (n < 0) {
@@ -240,16 +246,6 @@ int main (int argc, char **argv) {
   int c;
   char* opstring;
 
-  pthread_mutex_init(&lock, NULL);
-  pthread_mutex_init(&lock2, NULL);
-  pthread_mutex_init(&lock3, NULL);
-  pthread_mutex_init(&lock4, NULL);
-  pthread_mutex_init(&lock5, NULL);
-  pthread_mutex_init(&lock6, NULL);
-  pthread_mutex_init(&lock7, NULL);
-  pthread_cond_init(&signal2, NULL);
-  pthread_cond_init(&signal3, NULL);  
-  
   if (argc == 1) {
   	printf("-n 옵션을 사용하여 입력하세요!\n");
 	return 0;
@@ -268,10 +264,22 @@ int main (int argc, char **argv) {
   }
 
   op = atoi(opstring);
+  ThreadPool* thread_pool;
 
-  queueInit(&buffer);
-  queueInit(&sock_buffer);
-  ThreadPool* thread_pool = thread_pool_constructor(op);
+  if (op > 0) {
+        pthread_mutex_init(&lock, NULL);
+  	pthread_mutex_init(&lock2, NULL);
+  	pthread_mutex_init(&lock3, NULL);
+  	pthread_mutex_init(&lock4, NULL);
+  	pthread_mutex_init(&lock5, NULL);
+  	pthread_mutex_init(&lock6, NULL);
+  	pthread_mutex_init(&lock7, NULL);
+  	pthread_cond_init(&signal2, NULL);
+	pthread_cond_init(&signal3, NULL);
+  	queueInit(&buffer);
+  	queueInit(&sock_buffer);
+  	thread_pool = thread_pool_constructor(op);
+  }
 
   install_siginthandler();
   open_listening_socket (&listenfd);
@@ -284,20 +292,22 @@ int main (int argc, char **argv) {
       if (errno != EINTR) ERR_QUIT ("accept"); 
       /* otherwise try again, unless we are shutting down */
     } else { 
-     server_handoff (connfd); /* process the connection */
+     server_handoff (connfd, op); /* process the connection */
     }
   }
  
-  thread_pool_destructor(thread_pool);
-  pthread_mutex_destroy(&lock);
-  pthread_mutex_destroy(&lock2);
-  pthread_mutex_destroy(&lock3);
-  pthread_mutex_destroy(&lock4);
-  pthread_mutex_destroy(&lock5);
-  pthread_mutex_destroy(&lock6);
-  pthread_mutex_destroy(&lock7);
-  pthread_cond_destroy(&signal2);
-  pthread_cond_destroy(&signal3);
+  if (op > 0) {  
+  	thread_pool_destructor(thread_pool);
+  	pthread_mutex_destroy(&lock);
+  	pthread_mutex_destroy(&lock2);
+  	pthread_mutex_destroy(&lock3);
+  	pthread_mutex_destroy(&lock4);
+  	pthread_mutex_destroy(&lock5);
+  	pthread_mutex_destroy(&lock6);
+  	pthread_mutex_destroy(&lock7);
+  	pthread_cond_destroy(&signal2);
+  	pthread_cond_destroy(&signal3);
+  }
 
   CHECK (close (listenfd));
   return 0;

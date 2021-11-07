@@ -1,0 +1,16 @@
+==========st201720718 on Linux===================================
+==========compilation=============================
+make: Nothing to be done for 'default'.
+==========testing=================================
+==========server outputs===================
+==========stdout==========
+timer: testing  ../multisrv in testdir on Linux ---------------
+-n 옵션을 사용하여 입력하세요!
+==========stderr==========
+timer: user 1 ms system 0 ms 
+timer: messages sent: 0 received: 0
+timer: max resident set: 1508 page faults: major 0 minor: 81
+==========driver outputs===================
+usage: driver [port number]
+ ./driver
+==========done====================================
