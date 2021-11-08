@@ -102,6 +102,13 @@ int work(Data2* data)
 	return final_data;
 }
 
+int work2(int data)
+{
+	int final_data = data;
+
+	return final_data;
+}
+
 void* job(void *arg)
 {
 	ThreadPool * thread_pool = (ThreadPool *)arg;
@@ -179,7 +186,7 @@ void serve_connection (int sockfd, Package* package) {
   ssize_t  n, result;
   char line[MAXLINE];
   char output[MAXLINE];
-  char temp[MAXLINE];
+  char temp2[MAXLINE];
   connection_t conn;
   connection_init (&conn);
   conn.sockfd = sockfd;
@@ -219,19 +226,19 @@ void serve_connection (int sockfd, Package* package) {
       perror ("readline failed");
       goto quit;
     }
-    if (op > -1) {
+    if (op > -1) { // pthread mode
 	output[0] = '\0';
-  	temp[0] = '\0';
+  	temp2[0] = '\0';
 	while (cnt--) {    
 		while (IsQueueEmpty(&package->thread_pool->container[op]));    
 		int ans = dequeue(&package->thread_pool->container[op]);
-		sprintf(temp,"%d", ans);
-		int tro = strlen(temp);
+		sprintf(temp2,"%d", ans);
+		int tro = strlen(temp2);
 
-		temp[tro] = ' ';
-		temp[tro+1] = '\0';
+		temp2[tro] = ' ';
+		temp2[tro+1] = '\0';
 
-		strcat(output, temp);
+		strcat(output, temp2);
 	}
 	int len2 = strlen(output);
 	output[len2] = '\n';
@@ -243,9 +250,28 @@ void serve_connection (int sockfd, Package* package) {
       		perror ("writen failed");
       		goto quit;
     	}
-    } else {
-    	result = writen (&conn, line, n);
-	if (result != n) {
+    } else { // sequential mode
+	output[0] = '\0';
+  	temp2[0] = '\0';
+	char *temp = strtok(line, " ");
+    	while (temp != NULL) {
+		if (isdigit(temp[0]) != 0) {
+			int ans = work2(atoi(temp));
+			sprintf(temp2, "%d", ans);
+			int tro = strlen(temp2);
+
+			temp2[tro] = ' ';
+			temp2[tro + 1] = '\0';
+			strcat(output, temp2);
+		}
+		temp = strtok(NULL, " ");
+    	}
+	int len2 = strlen(output);
+	output[len2] = '\n';
+	output[len2 + 1] = '\0';
+
+    	result = writen (&conn, output, strlen(output));
+	if (result != strlen(output)) {
       		perror ("writen failed");
      		goto quit;
     	}
