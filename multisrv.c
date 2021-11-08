@@ -26,6 +26,8 @@
 #include "Queue.h"
 #include "Queue2.h"
 
+#define TIMEOUT 10
+
 Queue2 buffer;
 Queue sock_buffer;
 pthread_mutex_t lock;
@@ -35,10 +37,11 @@ pthread_mutex_t lock4;
 pthread_mutex_t lock5;
 pthread_mutex_t lock6;
 pthread_mutex_t lock7;
+pthread_mutex_t lock8;
 pthread_cond_t signal2;
 pthread_cond_t signal3;
 int op = 0;
-int flag = 0;
+int flag = 0, cnt2 = 0; //cnt for throughput
 
 // A thread pool that keeps whole threads while the program is running 
 typedef struct __threadpool {
@@ -55,6 +58,13 @@ typedef struct _package {
 void serve_connection (int sockfd, Package* package);
 void* job(void *arg);
 void* acceptorThread(void *args);
+
+void alarmHandler()
+{
+	printf("알람이 종료되었습니다!(%d 초)\n", TIMEOUT);
+	printf("총 request 처리 개수 : %d\n", cnt2);
+	return;
+}
 
 // Thread pool constructor
 // Only acceptor threads contain activated container(Queue) which will be used when they receive data 
@@ -106,12 +116,17 @@ int work(Data2* data)
 	for(int i=2;i<=final_data/2;i++){
 		if(final_data%i==0){
 			final_data = 0;
+			pthread_mutex_lock(&lock8);
+			cnt2++;
+			pthread_mutex_unlock(&lock8);
 			return final_data;
 		}
 		else{}
 	}
 	final_data =1;
-	
+	pthread_mutex_lock(&lock8);
+	cnt2++;
+	pthread_mutex_unlock(&lock8);
 	return final_data;
 }
 
@@ -119,7 +134,7 @@ int work(Data2* data)
 int work2(int data)
 {
 	int final_data = data;
-
+	cnt2++;
 	return final_data;
 }
 
@@ -343,6 +358,7 @@ int main (int argc, char **argv) {
 
   int c;
   char* opstring;
+  signal(SIGALRM, alarmHandler);
 
   if (argc == 1) {
   	printf("-n 옵션을 사용하여 입력하세요!\n");
@@ -372,6 +388,7 @@ int main (int argc, char **argv) {
   	pthread_mutex_init(&lock5, NULL);
   	pthread_mutex_init(&lock6, NULL);
   	pthread_mutex_init(&lock7, NULL);
+	pthread_mutex_init(&lock8, NULL);
   	pthread_cond_init(&signal2, NULL);
 	pthread_cond_init(&signal3, NULL);
   	queue2Init(&buffer);
@@ -382,6 +399,7 @@ int main (int argc, char **argv) {
   install_siginthandler();
   open_listening_socket (&listenfd);
   CHECK (listen (listenfd, 4));
+  alarm(TIMEOUT);
   /* allow up to 4 queued connection requests before refusing */
   while (! shutting_down) {
     errno = 0;
@@ -403,6 +421,7 @@ int main (int argc, char **argv) {
   	pthread_mutex_destroy(&lock5);
   	pthread_mutex_destroy(&lock6);
   	pthread_mutex_destroy(&lock7);
+	pthread_mutex_destroy(&lock8);
   	pthread_cond_destroy(&signal2);
   	pthread_cond_destroy(&signal3);
   }
