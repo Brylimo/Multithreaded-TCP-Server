@@ -61,6 +61,7 @@ serve_connection (int sockfd) {
       perror ("readline failed");
       goto quit;
     }
+    sleep(5);
     result = writen (&conn, line, n);
     if (shutting_down) goto quit;
     if (result != n) {

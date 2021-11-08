@@ -7,7 +7,7 @@
 typedef int Data;
 typedef struct _node
 {
-	int data;
+	Data data;
 	struct _node* next;
 }Node;
 typedef struct _queue

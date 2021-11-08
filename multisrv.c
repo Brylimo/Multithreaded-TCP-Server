@@ -25,8 +25,9 @@
 #include "echolib.h"
 #include "checks.h"
 #include "Queue.h"
+#include "Queue2.h"
 
-Queue buffer;
+Queue2 buffer;
 Queue sock_buffer;
 pthread_mutex_t lock;
 pthread_mutex_t lock2;
@@ -39,12 +40,19 @@ pthread_cond_t signal2;
 pthread_cond_t signal3;
 int op = 0;
 int flag = 0;
+
 typedef struct __threadpool {
 	int num_threads;
 	pthread_t* pool;
+	Queue* container; 
 } ThreadPool;
 
-void serve_connection (int sockfd, int op);
+typedef struct _package {
+	int thread_num;
+	ThreadPool* thread_pool;
+} Package;
+
+void serve_connection (int sockfd, Package* package);
 void* job(void *arg);
 void* acceptorThread(void *args);
 
@@ -53,13 +61,18 @@ ThreadPool* thread_pool_constructor(int num_threads)
 	ThreadPool* thread_pool = (ThreadPool *)malloc(sizeof(ThreadPool));
 	thread_pool->num_threads = num_threads;
 	thread_pool->pool = (pthread_t*)malloc(sizeof(pthread_t[num_threads]));
+	thread_pool->container = (Queue*)malloc(sizeof(Queue[num_threads / 3]));
 
 	for (int i = 0; i < num_threads; i++)
 	{
 		if (i % 3 == 0) {
-			pthread_create(&thread_pool->pool[i], NULL, acceptorThread, NULL);
+			Package* package = (Package*)malloc(sizeof(Package));
+			package->thread_num = i / 3;
+			package->thread_pool = thread_pool;
+			queueInit(&thread_pool->container[i / 3]);
+			pthread_create(&thread_pool->pool[i], NULL, acceptorThread, (void*)package);
 		} else {
-			pthread_create(&thread_pool->pool[i], NULL, job, NULL);
+			pthread_create(&thread_pool->pool[i], NULL, job, (void*)thread_pool);
 		}
 	}
 	return thread_pool;
@@ -82,30 +95,35 @@ void thread_pool_destructor(ThreadPool * thread_pool)
 	free(thread_pool->pool);
 }
 
-int work(Data data)
-{
-	return data;
+int work(Data2* data)
+{ 
+	int final_data = data->value;
+	
+	return final_data;
 }
 
 void* job(void *arg)
 {
-	Data data;
+	ThreadPool * thread_pool = (ThreadPool *)arg;
+	Data2* data;
 	while (!flag)
 	{
 		pthread_mutex_lock(&lock);
-		if (IsQueueEmpty(&buffer) && !flag) {
+		if (IsQueue2Empty(&buffer) && !flag) {
 			pthread_cond_wait(&signal2, &lock2);
-			data = dequeue(&buffer);
+			data = dequeue2(&buffer);
 		} else {
 			pthread_mutex_lock(&lock4);
-			data = dequeue(&buffer);
+			data = dequeue2(&buffer);
 			pthread_mutex_unlock(&lock4);
 		}
 		pthread_mutex_unlock(&lock);
 		
 		if (!flag) {
+			int id = data->thread_num;
 			int ans = work(data);
-			printf("answer : %d\n", ans);
+			enqueue(&thread_pool->container[id], ans);
+			//printf("answer : %d\n", ans);
 		}
 	}
 	return NULL;
@@ -113,6 +131,8 @@ void* job(void *arg)
 
 void* acceptorThread(void* args)
 {
+  Package* my_package = (Package*)args;
+
   Data sockfd;	
   while(!flag)
   {
@@ -128,13 +148,13 @@ void* acceptorThread(void* args)
 	pthread_mutex_unlock(&lock5);
 
 	if (!flag) {
-		serve_connection(sockfd, 1);
+		serve_connection(sockfd, my_package);
 	}
   }
   return NULL;
 }	
 
-void server_handoff (int sockfd, int op) {
+void server_handoff (int sockfd, int op, ThreadPool* thread_pool) {
   if (op > 0) {
   	if (IsQueueEmpty(&sock_buffer))
   	{  
@@ -146,35 +166,50 @@ void server_handoff (int sockfd, int op) {
 		pthread_mutex_lock(&lock7);
   	}
   } else if (op == 0) {
-  	serve_connection(sockfd, op);
+	Package* parcel = (Package*)malloc(sizeof(Package));
+        parcel->thread_num = -1;
+	parcel->thread_pool = thread_pool;	
+  	serve_connection(sockfd, parcel);
   }
 }
 
 /* the main per-connection service loop of the server; assumes
    sockfd is a connected socket */
-void serve_connection (int sockfd, int op) {
+void serve_connection (int sockfd, Package* package) {
   ssize_t  n, result;
   char line[MAXLINE];
+  char output[MAXLINE];
+  char temp[MAXLINE];
   connection_t conn;
   connection_init (&conn);
   conn.sockfd = sockfd;
+  int op = package->thread_num, cnt = 0;
+
   while (! shutting_down) {
-    if ((n = readline (&conn, line, MAXLINE)) == 0) goto quit;
+    cnt = 0;
+    if ((n = readline(&conn, line, MAXLINE)) == 0) goto quit;
     // my code
-    if (op > 0) {
+    if (op > -1) {
     	char *temp = strtok(line, " ");
     	while (temp != NULL) {
-		pthread_mutex_lock(&lock3);
-		if (IsQueueEmpty(&buffer))
-		{	
-			enqueue(&buffer, atoi(temp));
-			pthread_cond_signal(&signal2);
-		} else {
-			pthread_mutex_lock(&lock4);
-			enqueue(&buffer, atoi(temp));
-			pthread_mutex_unlock(&lock4);
+		if (isdigit(temp[0]) != 0) {
+			Tdata* tdata = (Tdata*)malloc(sizeof(Tdata));
+			tdata->thread_num = op;
+			tdata->value= atoi(temp);
+		
+			pthread_mutex_lock(&lock3);
+			if (IsQueue2Empty(&buffer))
+			{	
+				enqueue2(&buffer, tdata);
+				pthread_cond_signal(&signal2);
+			} else {
+				pthread_mutex_lock(&lock4);
+				enqueue2(&buffer, tdata);
+				pthread_mutex_unlock(&lock4);
+			}
+			pthread_mutex_unlock(&lock3);
+			cnt++;
 		}
-		pthread_mutex_unlock(&lock3);
 		temp = strtok(NULL, " ");
     	}	    
     }
@@ -184,12 +219,38 @@ void serve_connection (int sockfd, int op) {
       perror ("readline failed");
       goto quit;
     }
-    result = writen (&conn, line, n);
-    if (shutting_down) goto quit;
-    if (result != n) {
-      perror ("writen failed");
-      goto quit;
+    if (op > -1) {
+	output[0] = '\0';
+  	temp[0] = '\0';
+	while (cnt--) {    
+		while (IsQueueEmpty(&package->thread_pool->container[op]));    
+		int ans = dequeue(&package->thread_pool->container[op]);
+		sprintf(temp,"%d", ans);
+		int tro = strlen(temp);
+
+		temp[tro] = ' ';
+		temp[tro+1] = '\0';
+
+		strcat(output, temp);
+	}
+	int len2 = strlen(output);
+	output[len2] = '\n';
+	output[len2 + 1] = '\0';
+	
+	result = writen (&conn, output, strlen(output));
+
+    	if (result != strlen(output)) {
+      		perror ("writen failed");
+      		goto quit;
+    	}
+    } else {
+    	result = writen (&conn, line, n);
+	if (result != n) {
+      		perror ("writen failed");
+     		goto quit;
+    	}
     }
+    if (shutting_down) goto quit;
   }
 quit:
   CHECK (close (conn.sockfd));
@@ -276,7 +337,7 @@ int main (int argc, char **argv) {
   	pthread_mutex_init(&lock7, NULL);
   	pthread_cond_init(&signal2, NULL);
 	pthread_cond_init(&signal3, NULL);
-  	queueInit(&buffer);
+  	queue2Init(&buffer);
   	queueInit(&sock_buffer);
   	thread_pool = thread_pool_constructor(op);
   }
@@ -292,7 +353,7 @@ int main (int argc, char **argv) {
       if (errno != EINTR) ERR_QUIT ("accept"); 
       /* otherwise try again, unless we are shutting down */
     } else { 
-     server_handoff (connfd, op); /* process the connection */
+     server_handoff (connfd, op, thread_pool); /* process the connection */
     }
   }
  

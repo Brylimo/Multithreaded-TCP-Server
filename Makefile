@@ -16,14 +16,17 @@ echocli: echolib.o echocli.c $(DEPS)
 echosrv: echolib.o echosrv.c $(DEPS)
 	$(CC) $(CCOPTS) -o $@ echolib.o $(LIBS) $@.c
 
-multisrv: echolib.o Queue.o multisrv.c $(DEPS)
-	$(CC) $(CCOPTS) -o $@ echolib.o Queue.o $(LIBS) $@.c
+multisrv: echolib.o Queue.o Queue2.o multisrv.c $(DEPS)
+	$(CC) $(CCOPTS) -o $@ echolib.o Queue.o Queue2.o $(LIBS) $@.c
 
 echolib.o: echolib.c $(DEPS)
 	$(CC) $(CCOPTS) -c echolib.c
 
 Queue.o: Queue.c $(DEPS)
 	$(CC) $(CCOPTS) -c Queue.c
+
+Queue2.o: Queue2.c $(DEPS)
+	$(CC) $(CCOPTS) -c Queue2.c
 
 driver: driver.c echolib.o
 	$(CC) $(CCOPTS) -o driver driver.c $(LIBS) echolib.o
