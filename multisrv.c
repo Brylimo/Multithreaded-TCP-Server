@@ -20,7 +20,6 @@
  */
 
 #include "config.h"
-/* not needed now, but will be needed in multi-threaded version */
 #include "pthread.h"
 #include "echolib.h"
 #include "checks.h"
@@ -41,6 +40,7 @@ pthread_cond_t signal3;
 int op = 0;
 int flag = 0;
 
+// A thread pool that keeps whole threads while the program is running 
 typedef struct __threadpool {
 	int num_threads;
 	pthread_t* pool;
@@ -56,6 +56,8 @@ void serve_connection (int sockfd, Package* package);
 void* job(void *arg);
 void* acceptorThread(void *args);
 
+// Thread pool constructor
+// Only acceptor threads contain activated container(Queue) which will be used when they receive data 
 ThreadPool* thread_pool_constructor(int num_threads)
 {
 	ThreadPool* thread_pool = (ThreadPool *)malloc(sizeof(ThreadPool));
@@ -78,6 +80,7 @@ ThreadPool* thread_pool_constructor(int num_threads)
 	return thread_pool;
 }
 
+// Thread pool destructor
 void thread_pool_destructor(ThreadPool * thread_pool)
 {
 	flag = 1;
@@ -95,6 +98,7 @@ void thread_pool_destructor(ThreadPool * thread_pool)
 	free(thread_pool->pool);
 }
 
+// The main work that each thread in the thread pool will execute 
 int work(Data2* data)
 { 
 	int final_data = data->value;
@@ -102,6 +106,7 @@ int work(Data2* data)
 	return final_data;
 }
 
+// The main work which will be used in sequential version
 int work2(int data)
 {
 	int final_data = data;
@@ -109,6 +114,7 @@ int work2(int data)
 	return final_data;
 }
 
+// Each thread in the thread pool(not acceptor thread) will be allocated this job at the beginning
 void* job(void *arg)
 {
 	ThreadPool * thread_pool = (ThreadPool *)arg;
@@ -136,6 +142,7 @@ void* job(void *arg)
 	return NULL;
 }
 
+// Each acceptor thread executes this function at the beginning
 void* acceptorThread(void* args)
 {
   Package* my_package = (Package*)args;
@@ -195,8 +202,8 @@ void serve_connection (int sockfd, Package* package) {
   while (! shutting_down) {
     cnt = 0;
     if ((n = readline(&conn, line, MAXLINE)) == 0) goto quit;
-    // my code
-    if (op > -1) {
+    
+    if (op > -1) { // pthread mode
     	char *temp = strtok(line, " ");
     	while (temp != NULL) {
 		if (isdigit(temp[0]) != 0) {
@@ -325,11 +332,6 @@ int main (int argc, char **argv) {
   socklen_t clilen;
   struct sockaddr_in cliaddr;
 
-  /* NOTE: To make this multi-threaded, You may need insert
-     additional initialization code here, but you will not need to
-     modify anything below here, though you are permitted to
-     change anything in this file if you feel it is necessary for
-     your design */
   int c;
   char* opstring;
 
