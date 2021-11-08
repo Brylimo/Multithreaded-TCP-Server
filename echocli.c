@@ -15,7 +15,7 @@
  */
 
 #include "config.h"
-#include "echolib.h"i
+#include "echolib.h"
 #include "checks.h"
 #include <sys/time.h>
 
@@ -32,7 +32,7 @@ void random_arr(int n, char* sendline){
    if(debug_op==0){
       for(int i=0;i<n;i++){
          array[i] = rand()%300+1;
-         sprinf(temp, "%d", array[i]);
+         sprintf(temp, "%d", array[i]);
          strcat(sendline, temp);
          strcat(sendline, " ");
       }
@@ -57,8 +57,9 @@ client_work (int sockfd) {
   connection_init (&conn);
   conn.sockfd = sockfd;
   while ((p = fgets (sendline, sizeof (sendline), stdin))) {
-    num = atoi(sendline);
+    int num = atoi(sendline);
     random_arr(num, send);
+    printf("Send Data : %s\n", send);
     CHECK (writen (&conn, send, strlen (send)));
     if (readline (&conn, recvline, sizeof (recvline)) <= 0)
       ERR_QUIT ("str_cli: server terminated connection prematurely");
