@@ -103,6 +103,15 @@ int work(Data2* data)
 { 
 	int final_data = data->value;
 	
+	for(int i=2;i<=final_data/2;i++){
+		if(final_data%i==0){
+			final_data = 0;
+			return final_data;
+		}
+		else{}
+	}
+	final_data =1;
+	
 	return final_data;
 }
 

@@ -31,7 +31,7 @@ void random_arr(int n, char* sendline){
    srand(time(NULL));
    if(debug_op==0){
       for(int i=0;i<n;i++){
-         array[i] = rand()%300+1;
+         array[i] = rand()%300+2;
          sprintf(temp, "%d", array[i]);
          strcat(sendline, temp);
          strcat(sendline, " ");
@@ -39,7 +39,7 @@ void random_arr(int n, char* sendline){
    }
    else{
       for(int i=0;i<n;i++){
-         array[i] = i;
+         array[i] = i+2;
          sprintf(temp, "%d", array[i]);
          strcat(sendline, temp);
          strcat(sendline, " ");
