@@ -15,21 +15,51 @@
  */
 
 #include "config.h"
-#include "echolib.h"
+#include "echolib.h"i
 #include "checks.h"
 #include <sys/time.h>
 
 /* the main service loop of the client; assumes sockfd is a
    connected socket */
+
+int debug_op = 0;
+
+void random_arr(int n, char* sendline){
+   int* array = (int*)malloc(sizeof(int)*n);
+   sendline[0] = '\0';
+   char temp[20];
+   srand(time(NULL));
+   if(debug_op==0){
+      for(int i=0;i<n;i++){
+         array[i] = rand()%300+1;
+         sprinf(temp, "%d", array[i]);
+         strcat(sendline, temp);
+         strcat(sendline, " ");
+      }
+   }
+   else{
+      for(int i=0;i<n;i++){
+         array[i] = i;
+         sprintf(temp, "%d", array[i]);
+         strcat(sendline, temp);
+         strcat(sendline, " ");
+      }
+   }
+   sendline[strlen(sendline)-1] = '\n';
+}
+
 void
 client_work (int sockfd) {
   connection_t conn;
   char *p;
   char sendline[MAXLINE], recvline[MAXLINE];
+  char send[MAXLINE];
   connection_init (&conn);
   conn.sockfd = sockfd;
   while ((p = fgets (sendline, sizeof (sendline), stdin))) {
-    CHECK (writen (&conn, sendline, strlen (sendline)));
+    num = atoi(sendline);
+    random_arr(num, send);
+    CHECK (writen (&conn, send, strlen (send)));
     if (readline (&conn, recvline, sizeof (recvline)) <= 0)
       ERR_QUIT ("str_cli: server terminated connection prematurely");
     fprintf (stdout, "%s", recvline); /* rely that line contains "/n" */
@@ -42,8 +72,11 @@ client_work (int sockfd) {
 int
 get_server_port (int argc, char **argv) {
   int val;
+  if(debug_op==1){
+   return atoi(argv[2]);
+  }
   char * endptr;
-  if (argc != 2) goto fail;
+  if (argc < 2) goto fail;
   errno = 0;
   val = (int) strtol (argv [1], &endptr, 10);
   if (*endptr) goto fail;
@@ -79,9 +112,21 @@ set_server_address (struct sockaddr_in *servaddr, int argc, char **argv) {
 
 int
 main (int argc, char **argv) {
-   int sockfd;
+   int sockfd, c;
    struct sockaddr_in servaddr;
    struct timeval start, stop;
+   
+   while((c=getopt(argc, argv, "d"))!=-1){
+      switch(c){
+      case 'd' : 
+         debug_op = 1;
+         break;
+      case '?' :
+         printf("Unknown flag : %c\n", optopt);
+         break;
+       }
+   }
+   
    /* time how long we have to wait for a connection */
    CHECK (gettimeofday (&start, NULL));
    set_server_address (&servaddr, argc, argv);
