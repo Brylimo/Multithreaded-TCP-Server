@@ -113,7 +113,6 @@ void thread_pool_destructor(ThreadPool * thread_pool)
 int work(Data2* data)
 { 
 	int final_data = data->value;
-	
 	for(int i=2;i<=final_data/2;i++){
 		if(final_data%i==0){
 			final_data = 0;
@@ -122,7 +121,6 @@ int work(Data2* data)
 			pthread_mutex_unlock(&lock8);
 			return final_data;
 		}
-		else{}
 	}
 	final_data =1;
 	pthread_mutex_lock(&lock8);
@@ -135,6 +133,14 @@ int work(Data2* data)
 int work2(int data)
 {
 	int final_data = data;
+	for (int i=2;i<final_data/2;i++){
+		if (final_data%i==0) {
+			final_data = 0;
+			cnt2++;
+			return final_data;
+		}
+	}
+	final_data=1;
 	cnt2++;
 	return final_data;
 }
@@ -144,7 +150,7 @@ void* job(void *arg)
 {
 	ThreadPool * thread_pool = (ThreadPool *)arg;
 	Data2* data;
-	printf("queen\n");
+
 	while (!flag)
 	{
 		pthread_mutex_lock(&lock);
@@ -264,9 +270,7 @@ void serve_connection (int sockfd, Package* package) {
 	output[0] = '\0';
   	temp2[0] = '\0';
 	while (cnt--) {    
-		printf("kek\n");
-		while (IsQueueEmpty(&package->thread_pool->container[op]));    
-		printf("gg\n");
+		while (IsQueueEmpty(&package->thread_pool->container[op])) {}   
 		int ans = dequeue(&package->thread_pool->container[op]);
 		sprintf(temp2,"%d", ans);
 		int tro = strlen(temp2);
@@ -275,13 +279,12 @@ void serve_connection (int sockfd, Package* package) {
 		temp2[tro+1] = '\0';
 
 		strcat(output, temp2);
-		printf("%d\n", cnt);
+		//printf("%d\n", cnt);
 	}
 	int len2 = strlen(output);
 	output[len2] = '\n';
 	output[len2 + 1] = '\0';
 	
-	printf("ho\n");
 	result = writen (&conn, output, strlen(output));
 
     	if (result != strlen(output)) {
