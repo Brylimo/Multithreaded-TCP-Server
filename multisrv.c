@@ -19,6 +19,7 @@
 
  */
 
+#include <sys/time.h>
 #include "config.h" 
 #include "pthread.h"
 #include "echolib.h"
@@ -231,11 +232,12 @@ void serve_connection (int sockfd, Package* package) {
   connection_init (&conn);
   conn.sockfd = sockfd;
   int op = package->thread_num, cnt = 0;
+  struct timeval start, stop;
 
   while (! shutting_down) {
     cnt = 0;
     if ((n = readline(&conn, line, MAXLINE)) == 0) goto quit;
-    
+    CHECK (gettimeofday (&start, NULL));
     if (op > -1) { // pthread mode
     	char *temp = strtok(line, " ");
     	while (temp != NULL) {
@@ -270,7 +272,7 @@ void serve_connection (int sockfd, Package* package) {
 	output[0] = '\0';
   	temp2[0] = '\0';
 	while (cnt--) {    
-		while (IsQueueEmpty(&package->thread_pool->container[op])) {}   
+		while (IsQueueEmpty(&package->thread_pool->container[op])) {/* infinite loop */}   
 		int ans = dequeue(&package->thread_pool->container[op]);
 		sprintf(temp2,"%d", ans);
 		int tro = strlen(temp2);
@@ -286,7 +288,7 @@ void serve_connection (int sockfd, Package* package) {
 	output[len2 + 1] = '\0';
 	
 	result = writen (&conn, output, strlen(output));
-
+	CHECK(gettimeofday(&stop, NULL));
     	if (result != strlen(output)) {
       		perror ("writen failed");
       		goto quit;
@@ -312,11 +314,14 @@ void serve_connection (int sockfd, Package* package) {
 	output[len2 + 1] = '\0';
 
     	result = writen (&conn, output, strlen(output));
+	CHECK(gettimeofday (&stop, NULL));
 	if (result != strlen(output)) {
       		perror ("writen failed");
      		goto quit;
     	}
     }
+    fprintf(stderr, "request latency = %ld microseconds\n",
+		    (stop.tv_sec - start.tv_sec)*1000000 + (stop.tv_usec - start.tv_usec));
     if (shutting_down) goto quit;
   }
 quit:
