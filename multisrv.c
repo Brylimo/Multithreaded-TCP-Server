@@ -69,6 +69,14 @@ void alarmHandler()
 	return;
 }
 
+void alarmHandler2()
+{	
+ 	signal(SIGALRM, alarmHandler);
+	printf("알람을 시작합니다!\n");
+	alarm(TIMEOUT);
+	return;
+}
+
 // Thread pool constructor
 // Only acceptor threads contain activated container(Queue) which will be used when they receive data 
 ThreadPool* thread_pool_constructor(int num_threads)
@@ -415,7 +423,7 @@ int main (int argc, char **argv) {
 
   int c;
   char* opstring;
-  signal(SIGALRM, alarmHandler);
+  signal(SIGALRM, alarmHandler2);
 
   if (argc == 1) {
   	printf("-n 옵션을 사용하여 입력하세요!\n");
