@@ -79,7 +79,7 @@ ThreadPool* thread_pool_constructor(int num_threads)
 
 	for (int i = 0; i < num_threads; i++)
 	{
-		if (i % 3 == 0) {
+		if (i % 3 == 0 && i < 10) { // make only 4 threads
 			Package* package = (Package*)malloc(sizeof(Package));
 			package->thread_num = i / 3;
 			package->thread_pool = thread_pool;
@@ -151,13 +151,13 @@ void* job(void *arg)
 {
 	ThreadPool * thread_pool = (ThreadPool *)arg;
 	Data2* data;
-
+	
 	while (!flag)
 	{
 		pthread_mutex_lock(&lock);
 		if (IsQueue2Empty(&buffer) && !flag) {
 			pthread_cond_wait(&signal2, &lock2);
-			sleep(5);
+			//sleep(5);
 			data = dequeue2(&buffer);
 		} else {
 			pthread_mutex_lock(&lock4);
@@ -383,7 +383,7 @@ int main (int argc, char **argv) {
 	return 0;
   }
 
-  while ((c = getopt(argc, argv, "n:")) != -1) {
+  while ((c = getopt(argc, argv, "nq:")) != -1) {
   	switch (c)
 	{
 		case 'n':
