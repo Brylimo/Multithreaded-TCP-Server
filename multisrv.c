@@ -273,7 +273,9 @@ void serve_connection (int sockfd, Package* package) {
   	temp2[0] = '\0';
 	while (cnt--) {    
 		while (IsQueueEmpty(&package->thread_pool->container[op])) {/* infinite loop */}   
+		pthread_mutex_lock(&lock9);
 		int ans = dequeue(&package->thread_pool->container[op]);
+		pthread_mutex_unlock(&lock9);
 		sprintf(temp2,"%d", ans);
 		int tro = strlen(temp2);
 
@@ -286,7 +288,7 @@ void serve_connection (int sockfd, Package* package) {
 	int len2 = strlen(output);
 	output[len2] = '\n';
 	output[len2 + 1] = '\0';
-	
+
 	result = writen (&conn, output, strlen(output));
 	CHECK(gettimeofday(&stop, NULL));
     	if (result != strlen(output)) {
