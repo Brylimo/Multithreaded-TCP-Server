@@ -38,6 +38,7 @@ pthread_mutex_t lock5;
 pthread_mutex_t lock6;
 pthread_mutex_t lock7;
 pthread_mutex_t lock8;
+pthread_mutex_t lock9;
 pthread_cond_t signal2;
 pthread_cond_t signal3;
 int op = 0;
@@ -143,6 +144,7 @@ void* job(void *arg)
 {
 	ThreadPool * thread_pool = (ThreadPool *)arg;
 	Data2* data;
+	printf("queen\n");
 	while (!flag)
 	{
 		pthread_mutex_lock(&lock);
@@ -159,8 +161,9 @@ void* job(void *arg)
 		if (!flag) {
 			int id = data->thread_num;
 			int ans = work(data);
+			pthread_mutex_lock(&lock9);
 			enqueue(&thread_pool->container[id], ans);
-			//printf("answer : %d\n", ans);
+			pthread_mutex_unlock(&lock9);
 		}
 	}
 	return NULL;
@@ -261,7 +264,9 @@ void serve_connection (int sockfd, Package* package) {
 	output[0] = '\0';
   	temp2[0] = '\0';
 	while (cnt--) {    
+		printf("kek\n");
 		while (IsQueueEmpty(&package->thread_pool->container[op]));    
+		printf("gg\n");
 		int ans = dequeue(&package->thread_pool->container[op]);
 		sprintf(temp2,"%d", ans);
 		int tro = strlen(temp2);
@@ -270,11 +275,13 @@ void serve_connection (int sockfd, Package* package) {
 		temp2[tro+1] = '\0';
 
 		strcat(output, temp2);
+		printf("%d\n", cnt);
 	}
 	int len2 = strlen(output);
 	output[len2] = '\n';
 	output[len2 + 1] = '\0';
 	
+	printf("ho\n");
 	result = writen (&conn, output, strlen(output));
 
     	if (result != strlen(output)) {
@@ -389,6 +396,7 @@ int main (int argc, char **argv) {
   	pthread_mutex_init(&lock6, NULL);
   	pthread_mutex_init(&lock7, NULL);
 	pthread_mutex_init(&lock8, NULL);
+	pthread_mutex_init(&lock9, NULL);
   	pthread_cond_init(&signal2, NULL);
 	pthread_cond_init(&signal3, NULL);
   	queue2Init(&buffer);
@@ -422,6 +430,7 @@ int main (int argc, char **argv) {
   	pthread_mutex_destroy(&lock6);
   	pthread_mutex_destroy(&lock7);
 	pthread_mutex_destroy(&lock8);
+	pthread_mutex_destroy(&lock9);
   	pthread_cond_destroy(&signal2);
   	pthread_cond_destroy(&signal3);
   }
