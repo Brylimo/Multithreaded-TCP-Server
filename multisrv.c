@@ -157,6 +157,7 @@ void* job(void *arg)
 		pthread_mutex_lock(&lock);
 		if (IsQueue2Empty(&buffer) && !flag) {
 			pthread_cond_wait(&signal2, &lock2);
+			sleep(5);
 			data = dequeue2(&buffer);
 		} else {
 			pthread_mutex_lock(&lock4);

@@ -16,7 +16,7 @@
 
 /* per-connection input buffer length; determines maximum line
    length for inputs */
-#define MAXLINE 1024 
+#define MAXLINE 2048 
 
 /* state of a connection, including input buffer */
 typedef struct connection {
