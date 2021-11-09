@@ -275,19 +275,19 @@ void serve_connection (int sockfd, Package* package) {
   connection_t conn;
   connection_init (&conn);
   conn.sockfd = sockfd;
-  int op = package->thread_num, cnt = 0;
+  int op_2 = package->thread_num, cnt = 0;
   struct timeval start, stop;
 
   while (! shutting_down) {
     cnt = 0;
     if ((n = readline(&conn, line, MAXLINE)) == 0) goto quit;
     CHECK (gettimeofday (&start, NULL));
-    if (op > -1) { // pthread mode
+    if (op_2 > -1) { // pthread mode
     	char *temp = strtok(line, " ");
     	while (temp != NULL) {
 		if (isdigit(temp[0]) != 0) {
 			Tdata* tdata = (Tdata*)malloc(sizeof(Tdata));
-			tdata->thread_num = op;
+			tdata->thread_num = op_2;
 			tdata->value= atoi(temp);
 		
 			pthread_mutex_lock(&lock3);
@@ -312,13 +312,13 @@ void serve_connection (int sockfd, Package* package) {
       perror ("readline failed");
       goto quit;
     }
-    if (op > -1) { // pthread mode
+    if (op_2 > -1) { // pthread mode
 	output[0] = '\0';
   	temp2[0] = '\0';
 	while (cnt--) {    
-		while (IsQueueEmpty(&package->thread_pool->container[op])) {/* infinite loop */}   
+		while (IsQueueEmpty(&package->thread_pool->container[op_2])) {/* infinite loop */}   
 		pthread_mutex_lock(&lock9);
-		int ans = dequeue(&package->thread_pool->container[op]);
+		int ans = dequeue(&package->thread_pool->container[op_2]);
 		pthread_mutex_unlock(&lock9);
 		sprintf(temp2,"%d", ans);
 		int tro = strlen(temp2);
