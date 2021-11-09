@@ -60,6 +60,7 @@ typedef struct _package {
 void serve_connection (int sockfd, Package* package);
 void* job(void *arg);
 void* acceptorThread(void *args);
+void server_connection2(int sockfd);
 
 void alarmHandler()
 {
@@ -203,6 +204,53 @@ void* acceptorThread(void* args)
   return NULL;
 }	
 
+void handoff(int sockfd){
+	server_connection2(sockfd);
+}
+void server_connection2(int sockfd){
+	ssize_t n, result;
+	char line[MAXLINE];
+	char output[MAXLINE];
+	char temp2[MAXLINE];
+	connection_t conn;
+	connection_init(&conn);
+	conn.sockfd = sockfd;
+	struct timeval start, stop;
+
+	while(!shutting_down){
+		if((n=readline(&conn, line, MAXLINE))==0)goto quit;
+		CHECK(gettimeofday(&start, NULL));
+		output[0] = '\0';
+		temp2[0] = '\0';
+		char *temp = strtok(line, " ");
+		while(temp!=NULL){
+			if(isdigit(temp[0])!=0){
+				int ans = work2(atoi(temp));
+				sprintf(temp2, "%d", ans);
+				int tro = strlen(temp2);
+				temp2[tro] = ' ';
+				temp2[tro+1] = '\0';
+				strcat(output, temp2);
+			}
+			temp = strtok(NULL, " ");
+		}
+		int len2 = strlen(output);
+		output[len2] = '\n';
+		output[len2+1] = '\0';
+		result = writen(&conn, output, strlen(output));
+		CHECK(gettimeofday(&stop, NULL));
+		if(result!=strlen(output)){
+			perror("written failed");
+			goto quit;
+		}
+		 fprintf(stderr, "request latency = %ld microseconds\n",
+                    (stop.tv_sec - start.tv_sec)*1000000 + (stop.tv_usec - start.tv_usec));
+		if(shutting_down) goto quit;
+	}
+quit:
+	CHECK (close(conn.sockfd));
+}
+
 void server_handoff (int sockfd, int op, ThreadPool* thread_pool) {
   if (op > 0) {
   	if (IsQueueEmpty(&sock_buffer))
@@ -214,12 +262,7 @@ void server_handoff (int sockfd, int op, ThreadPool* thread_pool) {
 		enqueue(&sock_buffer, sockfd);
 		pthread_mutex_lock(&lock7);
   	}
-  } else if (op == 0) {
-	Package* parcel = (Package*)malloc(sizeof(Package));
-        parcel->thread_num = -1;
-	parcel->thread_pool = thread_pool;	
-  	serve_connection(sockfd, parcel);
-  }
+  } else{ }
 }
 
 /* the main per-connection service loop of the server; assumes
@@ -296,32 +339,6 @@ void serve_connection (int sockfd, Package* package) {
       		perror ("writen failed");
       		goto quit;
     	}
-    } else { // sequential mode
-	output[0] = '\0';
-  	temp2[0] = '\0';
-	char *temp = strtok(line, " ");
-    	while (temp != NULL) {
-		if (isdigit(temp[0]) != 0) {
-			int ans = work2(atoi(temp));
-			sprintf(temp2, "%d", ans);
-			int tro = strlen(temp2);
-
-			temp2[tro] = ' ';
-			temp2[tro + 1] = '\0';
-			strcat(output, temp2);
-		}
-		temp = strtok(NULL, " ");
-    	}
-	int len2 = strlen(output);
-	output[len2] = '\n';
-	output[len2 + 1] = '\0';
-
-    	result = writen (&conn, output, strlen(output));
-	CHECK(gettimeofday (&stop, NULL));
-	if (result != strlen(output)) {
-      		perror ("writen failed");
-     		goto quit;
-    	}
     }
     fprintf(stderr, "request latency = %ld microseconds\n",
 		    (stop.tv_sec - start.tv_sec)*1000000 + (stop.tv_usec - start.tv_usec));
@@ -369,6 +386,28 @@ void install_siginthandler () {
   CHECK (sigaction (SIGINT, &act, NULL));
 }
 
+void* all_in(void* data){
+	int connfd, listenfd;
+	socklen_t clilen;
+	struct sockaddr_in cliaddr;
+
+	install_siginthandler();
+	open_listening_socket(&listenfd);
+	CHECK(listen(listenfd, 4));
+	while(!shutting_down){
+		errno = 0;
+		clilen = sizeof(cliaddr);
+		if((connfd = accept(listenfd, (struct sockaddr *) &cliaddr, &clilen))<0){
+			if(errno!=EINTR) ERR_QUIT("accept");
+		}
+		else{
+			handoff(connfd);
+		}
+	}
+	CHECK(close(listenfd));
+	return NULL;
+}
+
 int main (int argc, char **argv) {
   int connfd, listenfd;
   socklen_t clilen;
@@ -383,7 +422,7 @@ int main (int argc, char **argv) {
 	return 0;
   }
 
-  while ((c = getopt(argc, argv, "nq:")) != -1) {
+  while ((c = getopt(argc, argv, "n:")) != -1) {
   	switch (c)
 	{
 		case 'n':
@@ -398,6 +437,16 @@ int main (int argc, char **argv) {
   op = atoi(opstring);
   ThreadPool* thread_pool;
 
+  if(op==1){
+	  pthread_t thread;
+	  int e=pthread_create(&thread, NULL, all_in, (void*)NULL);
+	  if(e<0){
+		  perror("thread create error : ");
+		  exit(0);
+	  }
+	  pthread_join(thread, NULL);
+  }
+  else{
   if (op > 0) {
         pthread_mutex_init(&lock, NULL);
   	pthread_mutex_init(&lock2, NULL);
@@ -427,7 +476,9 @@ int main (int argc, char **argv) {
       if (errno != EINTR) ERR_QUIT ("accept"); 
       /* otherwise try again, unless we are shutting down */
     } else { 
-     server_handoff (connfd, op, thread_pool); /* process the connection */
+	    if(op!=0) server_handoff (connfd, op, thread_pool);
+	    else handoff(connfd);
+ /* process the connection */
     }
   }
  
@@ -447,5 +498,6 @@ int main (int argc, char **argv) {
   }
 
   CHECK (close (listenfd));
+  }
   return 0;
 }
